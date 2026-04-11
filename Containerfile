@@ -4,80 +4,80 @@ ARG BASE_IMAGE=ghcr.io/ublue-os/bluefin-dx
 
 FROM ${BASE_IMAGE}:stable
 
+# Install kernel-devel, Slimbook packages, and build akmod kernel modules.
+#
+# Why this is one big RUN:
+# - Bluefin ships a stub kernel-devel (RPM registered, no files). We must
+#   remove it and install the real package so akmodsbuild finds headers.
+# - Slimbook akmod post-install scriptlets fail when run as root, so we
+#   install with --setopt=tsflags=noscripts and drive akmodsbuild ourselves.
+# - akmodsbuild refuses to run as root, so we drop to the akmods user.
+# - In buildx, /tmp may not be world-writable for the akmods user, so we
+#   chmod 1777 /tmp before dropping privileges.
+# - kernel-devel is removed at the end to save space (modules already built).
 RUN <<-EOF
-    set -eux
-    KERNEL_VERSION=$(rpm -qa kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')
-    echo "Building for kernel: ${KERNEL_VERSION}"
-    echo "${KERNEL_VERSION}" > /tmp/kernel-version.txt
+	set -eux
 
-    # Install REAL kernel-devel to enable akmod building
-    # Bluefin has a stub kernel-devel (RPM registered but no files), so we need to:
-    # 1. Remove the stub entry from the RPM database
-    # 2. Reinstall the actual package with files
-    export KVER=$(cat /tmp/kernel-version.txt)
-    echo "Removing stub kernel-devel..."
-    rpm -e --nodeps kernel-devel-${KVER} || true
-    echo "Installing real kernel-devel..."
-    dnf install -y kernel-devel-${KVER}
-    echo "Verifying kernel headers exist..." 
-    ls -la /usr/src/kernels/
+	KVER=$(rpm -qa kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')
+	echo "Building for kernel: ${KVER}"
 
-    dnf config-manager addrepo --from-repofile=https://download.opensuse.org/repositories/home:/Slimbook/Fedora_$(rpm -E %fedora)/home:Slimbook.repo
+	# Install REAL kernel-devel (replacing the stub entry in the RPM DB)
+	rpm -e --nodeps kernel-devel-${KVER} || true
+	dnf install -y kernel-devel-${KVER}
+	ls -la /usr/src/kernels/
 
-    # Install Slimbook packages
-    # Use noscripts to prevent akmod post-install from running as root (which fails)
-    dnf install -y --setopt=tsflags=noscripts \
-        slimbook-meta-common \
-        slimbook-meta-evo \
-        slimbook-meta-gnome \
-        slimbook-service \
-        slimbook-qc71-kmod \
-        slimbook-qc71-kmod-common \
-        slimbook-yt6801-kmod \
-        slimbook-yt6801-kmod-common
+	# Add Slimbook repository for the current Fedora version
+	dnf config-manager addrepo --from-repofile=https://download.opensuse.org/repositories/home:/Slimbook/Fedora_$(rpm -E %fedora)/home:Slimbook.repo
 
-# Build the kernel module RPM as non-root user, then install as root
-# akmods refuses to build as root, but needs root to install - so we split the steps
-# Need to ensure akmods user has writable home/working directory for rpmbuild
-# Fix /tmp permissions for buildx environments where it may not be world-writable
-RUN KVER=$(cat /tmp/kernel-version.txt) && \
-    echo "Building akmod RPM for kernel ${KVER}..." && \
-    SRPM=$(ls /usr/src/akmods/slimbook-qc71-kmod-*.src.rpm) && \
-    chmod 1777 /tmp && \
-    mkdir -p /var/lib/akmods && chown akmods:akmods /var/lib/akmods && \
-    su -s /bin/bash akmods -c "cd /var/lib/akmods && HOME=/var/lib/akmods akmodsbuild --target $(uname -m) --kernels ${KVER} ${SRPM}" && \
-    echo "Installing built kmod RPM..." && \
-    dnf install -y /var/lib/akmods/kmod-slimbook-qc71-${KVER}-*.rpm
+	# Install Slimbook packages, skipping akmod post-scripts (they fail as root)
+	dnf install -y --setopt=tsflags=noscripts \
+		slimbook-meta-common \
+		slimbook-meta-evo \
+		slimbook-meta-gnome \
+		slimbook-service \
+		slimbook-qc71-kmod \
+		slimbook-qc71-kmod-common \
+		slimbook-yt6801-kmod \
+		slimbook-yt6801-kmod-common
 
-    # Build the slimbook-yt6801 kernel module RPM
-    echo "Building yt6801 akmod RPM for kernel ${KVER}..." 
-    SRPM=$(ls /usr/src/akmods/slimbook-yt6801-kmod-*.src.rpm)
-    su -s /bin/bash akmods -c "cd /var/lib/akmods && HOME=/var/lib/akmods akmodsbuild --target $(uname -m) --kernels ${KVER} ${SRPM}"
-    echo "Installing built yt6801 kmod RPM..."
-    dnf install -y /var/lib/akmods/kmod-slimbook-yt6801-${KVER}-*.rpm
+	# Prepare a working directory and writable /tmp for the akmods user
+	chmod 1777 /tmp
+	mkdir -p /var/lib/akmods
+	chown akmods:akmods /var/lib/akmods
 
-    # Verify the kernel modules were built
-    ls -la /usr/lib/modules/$(cat /tmp/kernel-version.txt)/extra/ || echo "Checking module location..."
+	# Build each kernel module RPM as the akmods user
+	ARCH=$(uname -m)
+	for MODULE in slimbook-qc71-kmod slimbook-yt6801-kmod; do
+		SRPM=$(ls /usr/src/akmods/${MODULE}-*.src.rpm)
+		echo "Building ${MODULE} akmod RPM for kernel ${KVER}..."
+		su -s /bin/bash akmods -c "cd /var/lib/akmods && HOME=/var/lib/akmods akmodsbuild --target ${ARCH} --kernels ${KVER} ${SRPM}"
+	done
 
-    # Clean up kernel-devel to save space (module is already compiled)
-    dnf remove -y kernel-devel && dnf clean all
+	# Install the built kmod RPMs as root
+	dnf install -y \
+		/var/lib/akmods/kmod-slimbook-qc71-${KVER}-*.rpm \
+		/var/lib/akmods/kmod-slimbook-yt6801-${KVER}-*.rpm
 
-    # Clean up temp files
-    rm -f /tmp/kernel-version.txt
+	# Verify modules landed where the kernel expects them
+	ls -la /usr/lib/modules/${KVER}/extra/ || echo "Checking module location..."
+
+	# Drop kernel-devel to save space; modules are already compiled
+	dnf remove -y kernel-devel
+	dnf clean all
 EOF
 
 # Customize os-release for bootloader branding with Slimbook package digest
 ARG SLIMBOOK_DIGEST=unknown
 RUN <<-EOF
-    set -eux
-    CURRENT_VERSION=$(grep '^VERSION=' /usr/lib/os-release | cut -d'"' -f2)
-    SLIMBOOK_SHORT=$(echo "${SLIMBOOK_DIGEST}" | cut -c1-12)
-    NEW_VERSION="${CURRENT_VERSION} + Slimbook ${SLIMBOOK_SHORT}"
-    sed -i "s/^NAME=.*/NAME=\"Bluefin DX Slimbook\"/" /usr/lib/os-release
-    sed -i "s/^VERSION=.*/VERSION=\"${NEW_VERSION}\"/" /usr/lib/os-release
-    sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"Bluefin DX Slimbook (${NEW_VERSION})\"/" /usr/lib/os-release
-    sed -i "s/^VARIANT_ID=.*/VARIANT_ID=bluefin-dx-slimbook/" /usr/lib/os-release
-    sed -i "s|^HOME_URL=.*|HOME_URL=\"https://github.com/serandel/bluefin-dx-slimbook\"|" /usr/lib/os-release
+	set -eux
+	CURRENT_VERSION=$(grep '^VERSION=' /usr/lib/os-release | cut -d'"' -f2)
+	SLIMBOOK_SHORT=$(echo "${SLIMBOOK_DIGEST}" | cut -c1-12)
+	NEW_VERSION="${CURRENT_VERSION} + Slimbook ${SLIMBOOK_SHORT}"
+	sed -i "s/^NAME=.*/NAME=\"Bluefin DX Slimbook\"/" /usr/lib/os-release
+	sed -i "s/^VERSION=.*/VERSION=\"${NEW_VERSION}\"/" /usr/lib/os-release
+	sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"Bluefin DX Slimbook (${NEW_VERSION})\"/" /usr/lib/os-release
+	sed -i "s/^VARIANT_ID=.*/VARIANT_ID=bluefin-dx-slimbook/" /usr/lib/os-release
+	sed -i "s|^HOME_URL=.*|HOME_URL=\"https://github.com/serandel/bluefin-dx-slimbook\"|" /usr/lib/os-release
 EOF
 
 # Standard ostree container commit
