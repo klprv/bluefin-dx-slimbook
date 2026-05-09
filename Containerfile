@@ -43,7 +43,7 @@ RUN <<-EOF
 	# Install Slimbook packages, skipping akmod post-scripts (they fail as root)
 	dnf install -y --setopt=tsflags=noscripts \
 		slimbook-meta-common \
-		slimbook-meta-evo \
+		slimbook-meta-executive \
 		slimbook-meta-gnome \
 		slimbook-service \
 		slimbook-qc71-kmod \
