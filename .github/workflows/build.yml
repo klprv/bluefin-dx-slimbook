@@ -60,7 +60,7 @@ jobs:
               || dnf config-manager addrepo --from-repofile=https://download.opensuse.org/repositories/home:/Slimbook/Fedora_${PREV_FEDORA_VERSION}/home:Slimbook.repo 2>/dev/null
             dnf repoquery --latest-limit=1 \
               slimbook-meta-common \
-              slimbook-meta-evo \
+              slimbook-meta-executive \
               slimbook-meta-gnome \
               slimbook-service \
               slimbook-qc71-kmod \
