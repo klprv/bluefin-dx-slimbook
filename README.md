@@ -1,8 +1,10 @@
 # Bluefin DX Slimbook
 
-[![Build and Push](https://github.com/serandel/bluefin-dx-slimbook/actions/workflows/build.yml/badge.svg)](https://github.com/serandel/bluefin-dx-slimbook/actions/workflows/build.yml)
+[![Build and Push](https://github.com/killianprovin/bluefin-dx-slimbook/actions/workflows/build.yml/badge.svg)](https://github.com/killianprovin/bluefin-dx-slimbook/actions/workflows/build.yml)
 
-Custom [Bluefin DX](https://projectbluefin.io/) image with [Slimbook](https://slimbook.com/) laptop support.
+Custom [Bluefin DX](https://projectbluefin.io/) image with [Slimbook](https://slimbook.com/) Executive laptop support.
+
+Forked from [serandel/bluefin-dx-slimbook](https://github.com/serandel/bluefin-dx-slimbook), adapted for the Slimbook Executive series.
 
 ## What's included
 
@@ -22,10 +24,9 @@ This image adds the following Slimbook packages on top of Bluefin DX:
 ### Rebase from Bluefin DX
 
 ```bash
-rpm-ostree rebase ostree-image-signed:docker://ghcr.io/serandel/bluefin-dx-slimbook:stable
+sudo bootc switch ghcr.io/killianprovin/bluefin-dx-slimbook:stable
+sudo systemctl reboot
 ```
-
-Then reboot.
 
 ### Updates
 
@@ -49,5 +50,6 @@ In the mean time, we need the Slimbook akmods to properly control and report the
 
 ## Credits
 
+- [serandel/bluefin-dx-slimbook](https://github.com/serandel/bluefin-dx-slimbook) - Original project this fork is based on
 - [Universal Blue](https://universal-blue.org/) for Bluefin
 - [Slimbook](https://slimbook.com/) for their Linux laptops and open-source drivers
