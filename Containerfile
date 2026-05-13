@@ -21,7 +21,9 @@ RUN <<-EOF
 	# Upgrade the kernel so kernel-devel is available in the active repos.
 	# Fedora removes old kernel builds once a new one lands, so the base image
 	# kernel may no longer have a matching kernel-devel available.
-	dnf upgrade -y kernel
+	# --allowerasing removes kmod-framework-laptop, which is pinned to the base
+	# image kernel and would otherwise block the upgrade.
+	dnf upgrade -y kernel --allowerasing
 
 	KVER=$(rpm -qa kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' | sort -V | tail -1)
 	echo "Building for kernel: ${KVER}"
