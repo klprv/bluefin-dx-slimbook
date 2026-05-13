@@ -18,11 +18,16 @@ FROM ${BASE_IMAGE}:stable
 RUN <<-EOF
 	set -eux
 
-	KVER=$(rpm -qa kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')
+	# Upgrade the kernel so kernel-devel is available in the active repos.
+	# Fedora removes old kernel builds once a new one lands, so the base image
+	# kernel may no longer have a matching kernel-devel available.
+	dnf upgrade -y kernel
+
+	KVER=$(rpm -qa kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' | sort -V | tail -1)
 	echo "Building for kernel: ${KVER}"
 
 	# Install REAL kernel-devel (replacing the stub entry in the RPM DB)
-	rpm -e --nodeps kernel-devel-${KVER} || true
+	rpm -e --nodeps kernel-devel-${KVER} 2>/dev/null || true
 	dnf install -y kernel-devel-${KVER}
 	ls -la /usr/src/kernels/
 
