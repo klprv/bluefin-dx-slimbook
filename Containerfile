@@ -18,23 +18,27 @@ FROM ${BASE_IMAGE}:stable
 RUN <<-EOF
 	set -eux
 
-	# Upgrade the kernel so kernel-devel is available in the active repos.
-	# Fedora removes old kernel builds once a new one lands, so the base image
-	# kernel may no longer have a matching kernel-devel available.
-	# --allowerasing removes kmod-framework-laptop, which is pinned to the base
-	# image kernel and would otherwise block the upgrade.
-	dnf upgrade -y kernel --allowerasing
-
-	KVER=$(rpm -qa kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' | sort -V | tail -1)
+	KVER=$(rpm -qa kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')
 	echo "Building for kernel: ${KVER}"
 
-	# Install REAL kernel-devel (replacing the stub entry in the RPM DB)
+	# Install REAL kernel-devel (replacing the stub entry in the RPM DB).
+	# Active Fedora repos only carry the current kernel-devel; fall back to
+	# Koji, which archives every build permanently.
 	rpm -e --nodeps kernel-devel-${KVER} 2>/dev/null || true
-	dnf install -y kernel-devel-${KVER}
+	if ! dnf install -y kernel-devel-${KVER}; then
+		KVER_VER="${KVER%%-*}"
+		KVER_REST="${KVER#*-}"
+		KVER_ARCH="${KVER_REST##*.}"
+		KVER_REL="${KVER_REST%.*}"
+		dnf install -y "https://kojipkgs.fedoraproject.org/packages/kernel/${KVER_VER}/${KVER_REL}/${KVER_ARCH}/kernel-devel-${KVER}.rpm"
+	fi
 	ls -la /usr/src/kernels/
 
-	# Add Slimbook repository for the current Fedora version
-	dnf config-manager addrepo --from-repofile=https://download.opensuse.org/repositories/home:/Slimbook/Fedora_$(rpm -E %fedora)/home:Slimbook.repo
+	# Add Slimbook repository; fall back to the previous Fedora release if the
+	# current one is not yet available in the Slimbook OBS repo.
+	FEDORA_VER=$(rpm -E %fedora)
+	dnf config-manager addrepo --from-repofile="https://download.opensuse.org/repositories/home:/Slimbook/Fedora_${FEDORA_VER}/home:Slimbook.repo" \
+		|| dnf config-manager addrepo --from-repofile="https://download.opensuse.org/repositories/home:/Slimbook/Fedora_$((FEDORA_VER - 1))/home:Slimbook.repo"
 
 	# Install Slimbook packages, skipping akmod post-scripts (they fail as root)
 	dnf install -y --setopt=tsflags=noscripts \
