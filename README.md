@@ -1,6 +1,6 @@
 # Bluefin DX Slimbook
 
-[![Build and Push](https://github.com/killianprovin/bluefin-dx-slimbook/actions/workflows/build.yml/badge.svg)](https://github.com/killianprovin/bluefin-dx-slimbook/actions/workflows/build.yml)
+[![Build and Push](https://github.com/klprv/bluefin-dx-slimbook/actions/workflows/build.yml/badge.svg)](https://github.com/klprv/bluefin-dx-slimbook/actions/workflows/build.yml)
 
 Custom [Bluefin DX](https://projectbluefin.io/) image with [Slimbook](https://slimbook.com/) Executive laptop support.
 
@@ -24,7 +24,7 @@ This image adds the following Slimbook packages on top of Bluefin DX:
 ### Rebase from Bluefin DX
 
 ```bash
-sudo bootc switch ghcr.io/killianprovin/bluefin-dx-slimbook:stable
+sudo bootc switch ghcr.io/klprv/bluefin-dx-slimbook:stable
 sudo systemctl reboot
 ```
 
