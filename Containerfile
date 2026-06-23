@@ -88,7 +88,7 @@ RUN <<-EOF
 	sed -i "s/^VERSION=.*/VERSION=\"${NEW_VERSION}\"/" /usr/lib/os-release
 	sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"Bluefin DX Slimbook (${NEW_VERSION})\"/" /usr/lib/os-release
 	sed -i "s/^VARIANT_ID=.*/VARIANT_ID=bluefin-dx-slimbook/" /usr/lib/os-release
-	sed -i "s|^HOME_URL=.*|HOME_URL=\"https://github.com/killianprovin/bluefin-dx-slimbook\"|" /usr/lib/os-release
+	sed -i "s|^HOME_URL=.*|HOME_URL=\"https://github.com/klprv/bluefin-dx-slimbook\"|" /usr/lib/os-release
 EOF
 
 # Standard ostree container commit
